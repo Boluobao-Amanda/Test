@@ -1,0 +1,160 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  slug            String    @unique
+  name            String
+  category        String    // pendant, ring, bracelet, brooch
+  material        String    // gold, silver, rose-gold
+  basePrice       Float
+  description     String
+  productionDays  Int       @default(14)
+  
+  // Customization options
+  canEngrave      Boolean   @default(true)
+  canUploadPhoto  Boolean   @default(true)
+  canInlay        Boolean   @default(true)
+  
+  // Relations
+  assets          Asset[]
+  variants        ProductVariant[]
+  orderItems      OrderItem[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@map("products")
+}
+
+model ProductVariant {
+  id           String    @id @default(cuid())
+  productId    String
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  material     String    // gold, silver, rose-gold
+  size         String?   // S, M, L for rings/bracelets
+  priceDelta   Float     @default(0)
+  
+  orderItems   OrderItem[]
+  
+  @@map("product_variants")
+}
+
+model Asset {
+  id        String    @id @default(cuid())
+  productId String?
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  
+  type      String    // image, glb, texture
+  url       String
+  filename  String
+  size      Int?      // file size in bytes
+  metadata  String?   // JSON metadata
+  
+  createdAt DateTime  @default(now())
+  
+  @@map("assets")
+}
+
+model UploadedAsset {
+  id          String    @id @default(cuid())
+  filename    String
+  url         String
+  size        Int
+  contentType String
+  
+  // Ownership/session tracking
+  sessionId   String?
+  userEmail   String?
+  
+  // Approval status
+  status      String    @default("pending") // pending, approved, rejected
+  reason      String?   // rejection reason
+  
+  createdAt   DateTime  @default(now())
+  
+  @@map("uploaded_assets")
+}
+
+model CustomOption {
+  id       String @id @default(cuid())
+  key      String // engrave, inlay, photo
+  rules    String // JSON rules
+  
+  @@map("custom_options")
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  status           String      @default("pending") // pending, processing, production, quality-check, shipped, delivered, cancelled
+  currency         String      @default("USD")
+  subtotal         Float
+  taxAmount        Float       @default(0)
+  shippingAmount   Float       @default(0)
+  totalAmount      Float
+  
+  // Customer info
+  customerEmail    String
+  shippingAddress  String      // JSON
+  taxInfo          String?     // JSON tax/customs info
+  
+  // Payment
+  stripePaymentId  String?
+  paymentStatus    String      @default("pending") // pending, paid, failed, refunded
+  
+  // Tracking
+  trackingNumber   String?
+  estimatedDelivery DateTime?
+  
+  // Relations
+  items            OrderItem[]
+  
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String          @id @default(cuid())
+  orderId         String
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId       String
+  product         Product         @relation(fields: [productId], references: [id])
+  
+  variantId       String?
+  variant         ProductVariant? @relation(fields: [variantId], references: [id])
+  
+  quantity        Int             @default(1)
+  unitPrice       Float
+  totalPrice      Float
+  
+  // Customization
+  customization   String?         // JSON: engraving, inlay, uploadedPhotoUrl, etc.
+  previewUrl      String?         // 3D preview or rendered image URL
+  
+  // Production tracking
+  productionNotes String?
+  
+  @@map("order_items")
+}
+
+model InlayOption {
+  id    String @id @default(cuid())
+  name  String @unique
+  price Float
+  color String?
+  
+  @@map("inlay_options")
+}
